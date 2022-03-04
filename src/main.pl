@@ -1,103 +1,147 @@
-:- use_module(library(lists), [member/2]).
+:- use_module(library(lists), [member/2, append/3]).
 
 :- op(2, fx, '?').
 :- op(600, xfy, '@').
 :- op(600, xfy, '::').
+:- op(700, xfx, '<:').
 
+tyck(Tm, Ty) :-
+    Builtins = [true:bool, false:bool],
+    phrase(tm_ty(Tm, Ty), [Builtins], _).
 
-tcx_tm_ty(_, true, bool) :- !.
-tcx_tm_ty(_, false, bool) :- !.
+never <: _ --> [].
+Ty <: Ty --> [].
+F1 <: F2 -->
+    { F1 =.. [Functor, A1], F2 =.. [Functor, A2] },
+    A1 <: A2.
+Sub <: Super -->
+    { child_parent_type(Middle, Super) },
+    Sub <: Middle.
+child_parent_type(nat, int).
+child_parent_type(int, float).
 
-tcx_tm_ty(Tcx, if(Condition, Consequent, Alternative), Ty) :-
-    tcx_tm_ty(Tcx, Condition, bool),
-    tcx_tm_ty(Tcx, Consequent, Ty),
-    tcx_tm_ty(Tcx, Alternative, Ty),
+tm_ty(N, nat) -->
+    { integer(N), N >= 0 },
     !.
 
-tcx_tm_ty(Tcx, if(Condition, _, _), _) :-
-    tcx_tm_ty(Tcx, Condition, NonBool),
-    dif(NonBool, bool),
-    throw(err('the condition of an if expression must have type bool'(condition(Condition), Tcx))).
-
-tcx_tm_ty(Tcx, if(_, Consequent, Alternative), _) :-
-    tcx_tm_ty(Tcx, Consequent, T1),
-    tcx_tm_ty(Tcx, Alternative, T2),
-    dif(T1, T2),
-    throw(err('the branches of an if expression must have the same type'(consequent(T1), alternative(T2), tcx(Tcx)))).
-
-tcx_tm_ty(_, N, nat) :- number(N).
-tcx_tm_ty(Tcx, A + B, nat) :-
-    tcx_tm_ty(Tcx, A, nat),
-    tcx_tm_ty(Tcx, B, nat),
-    !.
-tcx_tm_ty(Tcx, A + B, _) :-
-    tcx_tm_ty(Tcx, A, T1),
-    tcx_tm_ty(Tcx, B, T2),
-    throw(err('operands to + operator must both be `nat`s'(left(T1), right(T2), tcx(Tcx)))).
-
-tcx_tm_ty(_, [], list(_)) :- !.
-tcx_tm_ty(Tcx, [A|B], list(Ty)) :-
-    tcx_tm_ty(Tcx, A, Ty),
-    tcx_tm_ty(Tcx, B, list(Ty)),
-    !.
-tcx_tm_ty(Tcx, [A|B], _) :-
-    tcx_tm_ty(Tcx, A, T1),
-    tcx_tm_ty(Tcx, B, list(T2)),
-    dif(T1, T2),
-    throw(err('lists must only contain items of one type'(element_type(T1), list_type(T2), tcx(Tcx)))).
-
-tcx_tm_ty(_, struct([]), struct([])) :- !.
-tcx_tm_ty(Tcx, struct([K=V | Rest]), struct([K:TyV | TyRest])) :-
-    atom(K),
-    tcx_tm_ty(Tcx, V, TyV),
-    tcx_tm_ty(Tcx, struct(Rest), struct(TyRest)),
+tm_ty(N, int) -->
+    { integer(N), N < 0 },
     !.
 
-tcx_tm_ty(Tcx0, let(Binder, Expr, Body), BodyTy) :-
-    atom(Binder),
-    tcx_tm_ty(Tcx0, Expr, ExprTy),
-    Tcx = [Binder:ExprTy | Tcx0],
-    tcx_tm_ty(Tcx, Body, BodyTy),
+tm_ty(N, float) -->
+    { float(N) },
     !.
 
-tcx_tm_ty(Tcx, Var, Ty) :-
-    atom(Var),
-    member(Var:Ty, Tcx),
-    !.
-tcx_tm_ty(Tcx, Var, _) :-
-    atom(Var),
-    throw(err('unbound variable'(variable(Var), tcx(Tcx)))).
+tm_ty(Var, Ty) -->
+    { atom(Var) },
+    (
+        lookup(Var, Ty)
+    ->
+        !
+    ;
+        type_check_error('unbound variable', [variable(Var)])
+    ).
 
-tcx_tm_ty(Tcx0, (Param:ParamTy->Body), ParamTy->BodyTy) :-
-    atom(Param),
-    Tcx = [Param:ParamTy | Tcx0],
-    tcx_tm_ty(Tcx, Body, BodyTy),
-    !.
-
-tcx_tm_ty(Tcx0, (?TyVar->Body), forall(?TyVar, BodyTy)) :-
-    atom(TyVar),
-    Tcx = [?TyVar | Tcx0],
-    tcx_tm_ty(Tcx, Body, BodyTy),
+tm_ty(if(Condition, Consequent, Alternative), Ty) -->
+    tm_ty(Condition, bool),
+    tm_ty(Consequent, Ty),
+    tm_ty(Alternative, Ty),
     !.
 
-tcx_tm_ty(Tcx, Fn@AppTy, T2) :-
-    tcx_tm_ty(Tcx, Fn, forall(?TyVar, ResTy)),
-    replacement_type_replaced(?TyVar->AppTy, ResTy, T2).
+tm_ty(if(Condition, _, _), _) -->
+    tm_ty(Condition, NonBool),
+    { dif(NonBool, bool) },
+    type_check_error(
+        'the condition of an if expression must have type bool',
+        [condition(Condition), condition_type(NonBool)]
+    ).
 
-tcx_tm_ty(Tcx, Call, RetTy) :-
-    Call =.. [Fn, Arg],
-    tcx_tm_ty(Tcx, Arg, ArgTy),
-    tcx_tm_ty(Tcx, Fn, (ArgTy->RetTy)),
+tm_ty(if(_, Consequent, Alternative), _) -->
+    tm_ty(Consequent, T1),
+    tm_ty(Alternative, T2),
+    { dif(T1, T2) },
+    type_check_error(
+        'the branches of an if expression must have the same type',
+        [consequent_type(T1), alternative_type(T2)]
+    ).
+
+tm_ty(A + B, nat) -->
+    tm_ty(A, nat),
+    tm_ty(B, nat),
     !.
-tcx_tm_ty(Tcx, Call, _) :-
-    Call =.. [Fn, Arg],
-    tcx_tm_ty(Tcx, Arg, ArgTy),
-    tcx_tm_ty(Tcx, Fn, (ParamTy->_)),
-    dif(ArgTy, ParamTy),
-    throw(err('wrong type passed to function'(expected(ParamTy), actual(ArgTy), Tcx))).
+tm_ty(A + B, _) -->
+    tm_ty(A, T1),
+    tm_ty(B, T2),
+    type_check_error('operands to + operator must both be `nat`s', [left(T1), right(T2)]).
 
-tcx_tm_ty(Tcx, Tm, _) :-
-    throw(err('unable to type the term'(term(Tm), tcx(Tcx)))).
+tm_ty([], list(_)) --> !.
+tm_ty([A|B], list(Ty)) -->
+    tm_ty(A, Ty),
+    tm_ty(B, list(Ty)),
+    !.
+tm_ty([A|B], _) -->
+    tm_ty(A, T1),
+    tm_ty(B, list(T2)),
+    { dif(T1, T2) },
+    type_check_error('lists must only contain items of one type', [element_type(T1), list_type(T2)]).
+
+tm_ty(struct([]), struct([])) --> !.
+tm_ty(struct([K=V | Rest]), struct([K:TyV | TyRest])) -->
+    { atom(K) },
+    tm_ty(V, TyV),
+    tm_ty(struct(Rest), struct(TyRest)),
+    !.
+
+tm_ty(let(Binder, Expr, Body), BodyTy), [Binder:ExprTy] -->
+    { atom(Binder) },
+    tm_ty(Expr, ExprTy),
+    tm_ty(Body, BodyTy),
+    !.
+
+tm_ty((Param:ParamTy->Body), ParamTy->BodyTy) -->
+    { atom(Param) },
+    tcx(Tcx0),
+    { phrase((
+            define(Param, ParamTy),
+            tm_ty(Body, BodyTy)
+        ), Tcx0, _) },
+    !.
+
+tm_ty((?TyVar->Body), forall(?TyVar, BodyTy)) -->
+    { atom(TyVar) },
+    tcx(Tcx0),
+    { phrase(tm_ty(Body, BodyTy), [?TyVar | Tcx0], _) },
+    !.
+
+tm_ty(Fn@AppTy, T2) -->
+    tm_ty(Fn, forall(?TyVar, ResTy)),
+    { replacement_type_replaced(?TyVar->AppTy, ResTy, T2) }.
+
+tm_ty(Call, RetTy) -->
+    { Call =.. [Fn, Arg] },
+    tm_ty(Arg, ArgTy),
+    tm_ty(Fn, (ArgTy->RetTy)),
+    !.
+tm_ty(Call, _) -->
+    { Call =.. [Fn, Arg] },
+    tm_ty(Arg, ArgTy),
+    tm_ty(Fn, (ParamTy->_)),
+    { dif(ArgTy, ParamTy) },
+    type_check_error('wrong type passed to function', [expected(ParamTy), actual(ArgTy)]).
+
+type_check_error(Msg, Info) -->
+    tcx(Tcx),
+    { append(Info, [tcx(Tcx)], InfoAndTcx) },
+    { throw(err(Msg, InfoAndTcx)) }.
+
+tcx(Tcx), [Tcx] --> [Tcx].
+tcx(Tcx0, Tcx), [Tcx] --> [Tcx0].
+
+lookup(Var, Ty) -->
+    tcx(Tcx),
+    { member(Var:Ty, Tcx) }.
+
+define(Var, Ty) --> tcx(Tcx0, [Var:Ty | Tcx0]).
 
 replacement_type_replaced(?V->_, forall(?V, Body), forall(?V, Body)) :- !.
 replacement_type_replaced(?V->New, ?V, New) :- !.
