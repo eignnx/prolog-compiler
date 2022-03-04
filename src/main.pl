@@ -1,7 +1,8 @@
 :- use_module(library(lists), [member/2, append/3]).
 
 :- op(2, fx, '?').
-:- op(600, xfy, '@').
+:- op(600, yfx, '@').
+:- op(600, yfx, '@@').
 :- op(600, xfy, '::').
 :- op(700, xfx, '<:').
 
@@ -65,9 +66,10 @@ tm_ty(if(_, Consequent, Alternative), _) -->
         [consequent_type(T1), alternative_type(T2)]
     ).
 
-tm_ty(A + B, nat) -->
-    tm_ty(A, nat),
-    tm_ty(B, nat),
+tm_ty(A + B, Ty) -->
+    tm_ty(A, Ty),
+    tm_ty(B, Ty),
+    Ty <: float,
     !.
 tm_ty(A + B, _) -->
     tm_ty(A, T1),
@@ -100,11 +102,7 @@ tm_ty(let(Binder, Expr, Body), BodyTy), [Binder:ExprTy] -->
 
 tm_ty((Param:ParamTy->Body), ParamTy->BodyTy) -->
     { atom(Param) },
-    tcx(Tcx0),
-    { phrase((
-            define(Param, ParamTy),
-            tm_ty(Body, BodyTy)
-        ), Tcx0, _) },
+    defining(Param, ParamTy, tm_ty(Body, BodyTy)),
     !.
 
 tm_ty((?TyVar->Body), forall(?TyVar, BodyTy)) -->
@@ -113,17 +111,15 @@ tm_ty((?TyVar->Body), forall(?TyVar, BodyTy)) -->
     { phrase(tm_ty(Body, BodyTy), [?TyVar | Tcx0], _) },
     !.
 
-tm_ty(Fn@AppTy, T2) -->
+tm_ty(Fn@@AppTy, T2) -->
     tm_ty(Fn, forall(?TyVar, ResTy)),
     { replacement_type_replaced(?TyVar->AppTy, ResTy, T2) }.
 
-tm_ty(Call, RetTy) -->
-    { Call =.. [Fn, Arg] },
+tm_ty(Fn@Arg, RetTy) -->
     tm_ty(Arg, ArgTy),
     tm_ty(Fn, (ArgTy->RetTy)),
     !.
-tm_ty(Call, _) -->
-    { Call =.. [Fn, Arg] },
+tm_ty(Fn@Arg, _) -->
     tm_ty(Arg, ArgTy),
     tm_ty(Fn, (ParamTy->_)),
     { dif(ArgTy, ParamTy) },
@@ -142,6 +138,10 @@ lookup(Var, Ty) -->
     { member(Var:Ty, Tcx) }.
 
 define(Var, Ty) --> tcx(Tcx0, [Var:Ty | Tcx0]).
+
+defining(Var, Ty, Program) -->
+    tcx(Tcx),
+    { phrase((define(Var, Ty), Program), [Tcx], [_])}.
 
 replacement_type_replaced(?V->_, forall(?V, Body), forall(?V, Body)) :- !.
 replacement_type_replaced(?V->New, ?V, New) :- !.
