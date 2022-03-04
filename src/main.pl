@@ -94,21 +94,20 @@ tm_ty(struct([K=V | Rest]), struct([K:TyV | TyRest])) -->
     tm_ty(struct(Rest), struct(TyRest)),
     !.
 
-tm_ty(let(Binder, Expr, Body), BodyTy), [Binder:ExprTy] -->
+tm_ty(let(Binder, Expr, Body), BodyTy) -->
     { atom(Binder) },
     tm_ty(Expr, ExprTy),
-    tm_ty(Body, BodyTy),
+    defining(Binder:ExprTy, tm_ty(Body, BodyTy)),
     !.
 
 tm_ty((Param:ParamTy->Body), ParamTy->BodyTy) -->
     { atom(Param) },
-    defining(Param, ParamTy, tm_ty(Body, BodyTy)),
+    defining(Param:ParamTy, tm_ty(Body, BodyTy)),
     !.
 
 tm_ty((?TyVar->Body), forall(?TyVar, BodyTy)) -->
     { atom(TyVar) },
-    tcx(Tcx0),
-    { phrase(tm_ty(Body, BodyTy), [?TyVar | Tcx0], _) },
+    defining(?TyVar, tm_ty(Body, BodyTy)),
     !.
 
 tm_ty(Fn@@AppTy, T2) -->
@@ -137,11 +136,16 @@ lookup(Var, Ty) -->
     tcx(Tcx),
     { member(Var:Ty, Tcx) }.
 
-define(Var, Ty) --> tcx(Tcx0, [Var:Ty | Tcx0]).
+define(Var:Ty) --> tcx(Tcx0, [Var:Ty | Tcx0]).
+define(?TyVar) --> tcx(Tcx0, [?TyVar | Tcx0]).
 
-defining(Var, Ty, Program) -->
+defining(Var:Ty, Program) -->
     tcx(Tcx),
-    { phrase((define(Var, Ty), Program), [Tcx], [_])}.
+    { phrase((define(Var:Ty), Program), [Tcx], [_])}.
+
+defining(?TyVar, Program) -->
+    tcx(Tcx),
+    { phrase((define(?TyVar), Program), [Tcx], [_])}.
 
 replacement_type_replaced(?V->_, forall(?V, Body), forall(?V, Body)) :- !.
 replacement_type_replaced(?V->New, ?V, New) :- !.
