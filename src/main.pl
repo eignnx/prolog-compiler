@@ -1,4 +1,6 @@
 :- use_module(library(lists), [member/2, append/3]).
+:- use_module(library(yall)).
+
 
 :- op(2, fx, '?').
 :- op(600, yfx, '@').
@@ -22,13 +24,17 @@ impl(add, int, ['+' = int_add]).
 impl(add, float, ['+' = float_add]).
 
 trait(write, [write: (self->stream->res(unit))]).
-impl(write, nat, [write = write_nat]).
 impl(write, bool, [write = write_bool]).
+impl(write, nat, [write = write_nat]).
+impl(write, int, [write = write_int]).
+impl(write, float, [write = write_float]).
+impl(write, opt(T), [write = write_opt]) :- impl(write, T, _).
 
-trait_type_resolved(Trait, Ty, Resolved) :-
-    trait(Trait, [_:AbstractTy]),
+trait_type_resolved(Trait, Ty, ResolvedSigs) :-
+    trait(Trait, AbstractSigs),
     impl(Trait, Ty, _),
-    replacement_abstract_replaced(Ty, AbstractTy, Resolved).
+    F = {Ty}/[Name:Abs, Name:Res]>>replacement_abstract_replaced(Ty, Abs, Res),
+    maplist(F, AbstractSigs, ResolvedSigs).
 
 replacement_abstract_replaced(New, self, New) :- !.
 replacement_abstract_replaced(New, Functor0, Functor) :-
@@ -101,7 +107,7 @@ tm_ty(A + B, Ty) -->
     tm_ty(A, TyA),
     tm_ty(B, TyB),
     (
-        { trait_type_resolved(add, TyA, (TyA->TyB->Ty)), ! }
+        { trait_type_resolved(add, TyA, ['+':(TyA->TyB->Ty)]), ! }
     ;
         type_check_error(
             'operand of `+` doesn''t implement `add` trait',
