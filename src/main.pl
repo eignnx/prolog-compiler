@@ -58,6 +58,23 @@ Sub <: Super -->
 child_parent_type(nat, int).
 child_parent_type(int, float).
 
+well_formed_type(A->B) -->
+    well_formed_type(A),
+    well_formed_type(B),
+    !.
+well_formed_type(forall(?TyVar, Body)) -->
+    { atom(TyVar) },
+    defining(?TyVar, well_formed_type(Body)),
+    !.
+well_formed_type(?TyVar) -->
+    { atom(TyVar) },
+    lookup(?TyVar),
+    !.
+well_formed_type(Functor) -->
+    { Functor =.. [_ | Args] },
+    maplist(well_formed_type, Args),
+    !.
+
 tm_ty(N, nat) -->
     { integer(N), N >= 0 },
     !.
@@ -151,6 +168,7 @@ tm_ty((?TyVar->Body), forall(?TyVar, BodyTy)) -->
     !.
 
 tm_ty(Fn@@AppTy, T2) -->
+    well_formed_type(AppTy),
     tm_ty(Fn, forall(?TyVar, ResTy)),
     { replacement_type_replaced(?TyVar->AppTy, ResTy, T2) },
     !.
@@ -183,6 +201,9 @@ tcx(Tcx0, Tcx), [Tcx] --> [Tcx0].
 lookup(Var, Ty) -->
     tcx(Tcx),
     { member(Var:Ty, Tcx) }.
+lookup(?TyVar) -->
+    tcx(Tcx),
+    { member(?TyVar, Tcx) }.
 
 define(Var:Ty) --> tcx(Tcx0, [Var:Ty | Tcx0]).
 define(?TyVar) --> tcx(Tcx0, [?TyVar | Tcx0]).
