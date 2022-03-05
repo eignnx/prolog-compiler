@@ -109,8 +109,9 @@ tm_ty(A + B, Ty) -->
     (
         { trait_type_resolved(add, TyA, ['+':(TyA->TyB->Ty)]), ! }
     ;
+        { format(atom(Msg), 'I can''t add a `~p` and a `~p` together!', [TyA, TyB]) },
         type_check_error(
-            'operand of `+` doesn''t implement `add` trait',
+            Msg,
             [operands(A, B), tys(TyA, TyB)]
         )
     ).
