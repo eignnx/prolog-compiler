@@ -155,6 +155,13 @@ tm_ty(Fn@@AppTy, T2) -->
     { replacement_type_replaced(?TyVar->AppTy, ResTy, T2) },
     !.
 
+% Do static dispatch on the type of the argument if the fn is polymorphic.
+tm_ty(Fn@Arg, RetTy) -->
+    tm_ty(Arg, ArgTy),
+    tm_ty(Fn, forall(?_, _)),
+    % Retry, but apply the arg type first.
+    tm_ty(Fn@@ArgTy@Arg, RetTy),
+    !.
 tm_ty(Fn@Arg, RetTy) -->
     tm_ty(Arg, ArgTy),
     tm_ty(Fn, (ArgTy->RetTy)),
