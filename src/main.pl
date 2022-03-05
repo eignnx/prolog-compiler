@@ -6,8 +6,15 @@
 :- op(600, xfy, '::').
 :- op(700, xfx, '<:').
 
+builtin(true, bool).
+builtin(false, bool).
+builtin(some, forall(?t, ?t -> opt(?t))).
+builtin(none, forall(?t, opt(?t))).
+builtins(Builtins) :-
+    bagof(Tm:Ty, builtin(Tm, Ty), Builtins).
+
 tyck(Tm, Ty) :-
-    Builtins = [true:bool, false:bool],
+    builtins(Builtins),
     phrase(tm_ty(Tm, Ty), [Builtins], _).
 
 never <: _ --> [].
@@ -112,7 +119,8 @@ tm_ty((?TyVar->Body), forall(?TyVar, BodyTy)) -->
 
 tm_ty(Fn@@AppTy, T2) -->
     tm_ty(Fn, forall(?TyVar, ResTy)),
-    { replacement_type_replaced(?TyVar->AppTy, ResTy, T2) }.
+    { replacement_type_replaced(?TyVar->AppTy, ResTy, T2) },
+    !.
 
 tm_ty(Fn@Arg, RetTy) -->
     tm_ty(Arg, ArgTy),
