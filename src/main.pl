@@ -13,6 +13,30 @@ builtin(none, forall(?t, opt(?t))).
 builtins(Builtins) :-
     bagof(Tm:Ty, builtin(Tm, Ty), Builtins).
 
+:- discontiguous trait/2.
+:- discontiguous impl/3.
+
+trait(add, ['+': (self -> self -> self)]).
+impl(add, nat, ['+' = nat_add]).
+impl(add, int, ['+' = int_add]).
+impl(add, float, ['+' = float_add]).
+
+trait(write, [write: (self->stream->res(unit))]).
+impl(write, nat, [write = write_nat]).
+impl(write, bool, [write = write_bool]).
+
+trait_type_resolved(Trait, Ty, Resolved) :-
+    trait(Trait, [_:AbstractTy]),
+    impl(Trait, Ty, _),
+    replacement_abstract_replaced(Ty, AbstractTy, Resolved).
+
+replacement_abstract_replaced(New, self, New) :- !.
+replacement_abstract_replaced(New, Functor0, Functor) :-
+    Functor0 =.. [Head | Args0],
+    maplist(replacement_abstract_replaced(New), Args0, Args),
+    Functor =.. [Head | Args],
+    !.
+
 tyck(Tm, Ty) :-
     builtins(Builtins),
     phrase(tm_ty(Tm, Ty), [Builtins], _).
@@ -74,14 +98,16 @@ tm_ty(if(_, Consequent, Alternative), _) -->
     ).
 
 tm_ty(A + B, Ty) -->
-    tm_ty(A, Ty),
-    tm_ty(B, Ty),
-    Ty <: float,
-    !.
-tm_ty(A + B, _) -->
-    tm_ty(A, T1),
-    tm_ty(B, T2),
-    type_check_error('operands to + operator must both be `nat`s', [left(T1), right(T2)]).
+    tm_ty(A, TyA),
+    tm_ty(B, TyB),
+    (
+        { trait_type_resolved(add, TyA, (TyA->TyB->Ty)), ! }
+    ;
+        type_check_error(
+            'operand of `+` doesn''t implement `add` trait',
+            [operands(A, B), tys(TyA, TyB)]
+        )
+    ).
 
 tm_ty([], list(_)) --> !.
 tm_ty([A|B], list(Ty)) -->
