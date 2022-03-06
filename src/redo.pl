@@ -76,13 +76,12 @@ impl(eq@@(opt@@T), [impl(eq@@T)], ['==' = eq_opt]).
 impl(eq@@(res@@E@@T), [impl(eq@@E), impl(eq@@T)], ['==' = eq_res]).
 
 resolve_trait(Trait, Methods, OutConstraints) :-
-    copy_term(Trait, TraitCopy1),
-    copy_term(Trait, TraitCopy2),
-    trait(TraitCopy1, Methods),
-    impl(TraitCopy2, Constraints, _MethodImpls),
+    trait(TraitSig0, Methods0), copy_term(TraitSig0-Methods0, TraitSig-Methods),
+    impl(ImplSig0, Constraints0, _MethodImpls0), copy_term(ImplSig0-Constraints0, ImplSig-Constraints),
+    Trait = TraitSig, Trait = ImplSig,
     maplist(try_resolve_trait, Constraints, OutConstraintsUnflattened),
     flatten(OutConstraintsUnflattened, OutConstraints).
 
-try_resolve_trait(impl(TraitSig), Constraints) :-
-    ground(TraitSig) -> resolve_trait(TraitSig, _MethodImpls, Constraints)
-                      ; Constraints = [impl(TraitSig)].
+try_resolve_trait(impl(Trait@@Self), Constraints) :-
+    var(Self) -> Constraints = [impl(Trait@@Self)]
+               ; resolve_trait(Trait@@Self, _MethodImpls, Constraints).
