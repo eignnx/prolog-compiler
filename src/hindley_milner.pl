@@ -158,9 +158,7 @@ test :-
             inference(Tcx, Tm, ActualVs=>ActualTy)
         ->
             (
-                ExpectedVs-ExpectedTy =@= ActualVs-ActualTy
-            ->
-                true
+                (ExpectedVs=>ExpectedTy) =@= (ActualVs=>ActualTy)
             ;
                 format('!!! Test Failure:~n'),
                 format('  Term: ~p~n', [Tm]),
@@ -177,7 +175,7 @@ test :-
         test_case(Tcx, Tm, failure(Msg)),
         (
             inference(Tcx, Tm, Res)
-        -> 
+        ->
             format('!!! Unexpected Inference Success:~n'),
             format('  Expected inference failure for term: ~p~n', [Tm]),
             format('  Inferred incorrect type: ~p~n', [Res]),
