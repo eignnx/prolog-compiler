@@ -60,6 +60,9 @@ up having type `nat`).
 :- mode inference(+_TypeContext, +_Term, -(_GenericVariables=>_Type)).
 
 inference(_Tcx, N, []=>nat) :- integer(N), N >= 0.
+inference(Tcx, A+B, []=>nat) :-
+    inference(Tcx, A, []=>nat),
+    inference(Tcx, B, []=>nat).
 
 inference(_Tcx, true,  []=>bool).
 inference(_Tcx, false, []=>bool).
@@ -115,6 +118,7 @@ var_set_union(ListOfVarSets, Union) :-
 :- mode test_case(+_Tcx, +_Tm, +(_ExpectedGenericVariables=>_ExpectedType)).
 
 test_case([], 123, []=>nat).
+test_case([], 123+456, []=>nat).
 test_case([], true, []=>bool).
 test_case([], false, []=>bool).
 test_case([], tuple([123, true]), []=>tuple([nat, bool])).
@@ -125,6 +129,7 @@ test_case([], x->123, []=>_T->nat).
 test_case([], x->x, []=>T->T).
 test_case([], let(f, x->x, f), [T]=>T->T).
 test_case([], let(f, x->y->tuple([x,y]), f), [A, B]=>A->B->tuple([A, B])).
+test_case([], let(add, x->y->x+y, add), []=>nat->nat->nat).
 test_case([], let(f, x->x, f@123), []=>nat).
 test_case([], let(f, x->x, tuple([f@123, f@true])), []=>tuple([nat, bool])).
 test_case([], let(id, x->x, let(f, y->id@y, f)), [A]=>A->A).
