@@ -19,9 +19,8 @@ valid_tau_type(T) :- atom(T).
 valid_tau_type(A->B) :-
     valid_tau_type(A),
     valid_tau_type(B).
-valid_tau_type(pair(A, B)) :-
-    valid_tau_type(A),
-    valid_tau_type(B).
+valid_tau_type(tuple(Ts)) :-
+    maplist(valid_tau_type, Ts).
 valid_tau_type(V) :- var(V).
 
 /*
@@ -49,10 +48,10 @@ inference(_Tcx, N, []=>nat) :- integer(N), N >= 0.
 inference(_Tcx, true,  []=>bool).
 inference(_Tcx, false, []=>bool).
 
-inference(Tcx, pair(A, B), Vs=>pair(ATy, BTy)) :-
-    inference(Tcx, A, AVs=>ATy),
-    inference(Tcx, B, BVs=>BTy),
-    term_variables(AVs-BVs, Vs). % The poor man's set union.
+inference(Tcx, tuple(Tms), Vs=>tuple(Tys)) :-
+    Mapper = {Tcx}/[E, EVs, ETy]>>inference(Tcx, E, EVs=>ETy),
+    maplist(Mapper, Tms, VsList, Tys),
+    term_variables(VsList, Vs). % The poor man's set union.
 
 inference(Tcx, X, Vs=>Ty) :-
     atom(X),
@@ -86,13 +85,13 @@ inference(Tcx, Fn@Arg, Vs=>RetTy) :-
 test_case([], 123, []=>nat).
 test_case([], true, []=>bool).
 test_case([], false, []=>bool).
-test_case([], pair(123, true), []=>pair(nat, bool)).
+test_case([], tuple([123, true]), []=>tuple([nat, bool])).
 test_case([], x->123, []=>_T->nat).
 test_case([], x->x, []=>T->T).
 test_case([], let(f, x->x, f), [T]=>T->T).
-test_case([], let(f, x->y->pair(x,y), f), [A, B]=>A->B->pair(A, B)).
+test_case([], let(f, x->y->tuple([x,y]), f), [A, B]=>A->B->tuple([A, B])).
 test_case([], let(f, x->x, f@123), []=>nat).
-test_case([], let(f, x->x, pair(f@123, f@true)), []=>pair(nat, bool)).
+test_case([], let(f, x->x, tuple([f@123, f@true])), []=>tuple([nat, bool])).
 test_case([], let(id, x->x, let(f, y->id@y, f)), [A]=>A->A).
 test_case([], let(x, 123, x), []=>nat).
 test_case([], let(add, x->y->123, add@123@123), []=>nat).
