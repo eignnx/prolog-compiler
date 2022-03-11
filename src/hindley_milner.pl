@@ -9,7 +9,8 @@ tcx([X;Sigma | Tcx]) :-
     sigma_type(Sigma),
     tcx(Tcx).
 
-% Defines/validates an abstracted ("sigma") type.
+% Defines/validates an abstracted ("sigma") type. These are often called "type
+% schemes".
 sigma_type(Vs=>Tau) :-
     set_of_vars(Vs),
     tau_type(Tau).
@@ -22,13 +23,21 @@ set_of_vars([V | Vs]) :-
     maplist(\==(V), Vs).
 
 % Defines/validates a simple ("tau") type.
-tau_type(T) :- atom(T). % A primitive type like `nat`, `bool`, etc.
 tau_type(A->B) :-
     tau_type(A),
     tau_type(B).
 tau_type(tuple(Ts)) :-
     maplist(tau_type, Ts).
+tau_type(Constructor) :-
+    Constructor =.. [Name | Args],
+    length(Args, Arity),
+    type_constructor(Name/Arity),
+    maplist(tau_type, Args).
 tau_type(V) :- var(V). % An Inference/Generic Variable.
+
+type_constructor(nat/0).
+type_constructor(bool/0).
+type_constructor(list/1).
 
 /*
 The `inference` predicate makes a distinction between Inference Variables and
@@ -54,6 +63,12 @@ inference(_Tcx, N, []=>nat) :- integer(N), N >= 0.
 
 inference(_Tcx, true,  []=>bool).
 inference(_Tcx, false, []=>bool).
+
+inference(_Tcx, [], [T]=>list(T)).
+inference(Tcx, [Tm | Tms], Vs=>list(EleTy)) :-
+    inference(Tcx, Tm, TmVs=>EleTy),
+    inference(Tcx, Tms, TmsVs=>list(EleTy)),
+    term_variables(TmVs-TmsVs, Vs).
 
 inference(Tcx, tuple(Tms), Vs=>tuple(Tys)) :-
     Mapper = {Tcx}/[E, EVs, ETy]>>inference(Tcx, E, EVs=>ETy),
@@ -93,6 +108,9 @@ test_case([], 123, []=>nat).
 test_case([], true, []=>bool).
 test_case([], false, []=>bool).
 test_case([], tuple([123, true]), []=>tuple([nat, bool])).
+test_case([], [], [T]=>list(T)).
+test_case([], [1, 2, 3], []=>list(nat)).
+test_case([], [[], [], []], [T]=>list(list(T))).
 test_case([], x->123, []=>_T->nat).
 test_case([], x->x, []=>T->T).
 test_case([], let(f, x->x, f), [T]=>T->T).
