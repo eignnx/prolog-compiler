@@ -151,17 +151,28 @@ test_case([x;[]=>nat], x, []=>nat).
 
 
 test :-
+    % Test that all expected successes suceed.
     forall(
         test_case(Tcx, Tm, ExpectedVs=>ExpectedTy),
         (
-            inference(Tcx, Tm, ActualVs=>ActualTy) ->
+            inference(Tcx, Tm, ActualVs=>ActualTy)
+        ->
             (
-                ExpectedVs-ExpectedTy =@= ActualVs-ActualTy -> true
-                ; format('!!! Test Failure:~n  Term: ~p~n  Expected type: ~p=>~p~n  Actual type:   ~p=>~p~n~n', [Tm, ExpectedVs, ExpectedTy, ActualVs, ActualTy])
+                ExpectedVs-ExpectedTy =@= ActualVs-ActualTy
+            ->
+                true
+            ;
+                format('!!! Test Failure:~n'),
+                format('  Term: ~p~n', [Tm]),
+                format('  Expected type: ~p=>~p~n', [ExpectedVs, ExpectedTy]),
+                format('  Actual type:   ~p=>~p~n~n', [ActualVs, ActualTy])
             )
-            ; format('!!! Inference Failure:~n  Term: ~p~n~n', [Tm])
+        ;
+            format('!!! Inference Failure:~n'),
+            format('  Term: ~p~n~n', [Tm])
         )
     ),
+    % Test that all expected failures fail.
     forall(
         test_case(Tcx, Tm, failure(Msg)),
         (
