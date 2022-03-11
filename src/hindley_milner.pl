@@ -68,12 +68,12 @@ inference(_Tcx, [], [T]=>list(T)).
 inference(Tcx, [Tm | Tms], Vs=>list(EleTy)) :-
     inference(Tcx, Tm, TmVs=>EleTy),
     inference(Tcx, Tms, TmsVs=>list(EleTy)),
-    term_variables(TmVs-TmsVs, Vs).
+    var_set_union([TmVs, TmsVs], Vs).
 
 inference(Tcx, tuple(Tms), Vs=>tuple(Tys)) :-
     Mapper = {Tcx}/[E, EVs, ETy]>>inference(Tcx, E, EVs=>ETy),
     maplist(Mapper, Tms, VsList, Tys),
-    term_variables(VsList, Vs). % The poor man's set union.
+    var_set_union(VsList, Vs).
 
 inference(Tcx, X, Vs=>Ty) :-
     atom(X),
@@ -89,17 +89,27 @@ inference(Tcx, X->B, Vs=>XTy->BTy) :-
 
 inference(Tcx, let(X, E, B), BVs=>BTy) :-
     atom(X),
-    inference(Tcx, E, _=>ETy),
-    term_variables(ETy, EVs),
+    inference(Tcx, E, _EGenVs=>ETy),
+    % Collect all the variables in `ETy`. These are the union of both Generic
+    % and Inference Variables from `ETy`.
+    term_variables(ETy, EInfAndGenVs),
+    % Treat all Inference Varibles in `E` as Generic in the body.
+    EVs = EInfAndGenVs,
     HypotheticalTcx = [X;EVs=>ETy | Tcx],
     inference(HypotheticalTcx, B, BVs=>BTy).
 
 inference(Tcx, Fn@Arg, Vs=>RetTy) :-
     inference(Tcx, Arg, ArgVs=>ArgTy),
     inference(Tcx, Fn, FnVs0=>FnTy),
-    copy_term(FnVs0-FnTy, FnVs-(ParamTy->RetTy)),
-    ParamTy = ArgTy,
-    term_variables(FnVs-ArgVs, Vs). % The poor man's set union.
+    copy_term(FnVs0=>FnTy, FnVs=>(ParamTy->RetTy)), % Make a copy for instantiation.
+    ParamTy = ArgTy, % Instantiate.
+    var_set_union([FnVs, ArgVs], Vs).
+
+
+:- mode var_set_union(+_ListOfVarSets, -_Union).
+
+var_set_union(ListOfVarSets, Union) :-
+    term_variables(ListOfVarSets, Union).
 
 
 :- mode test_case(+_Tcx, +_Tm, +(_ExpectedGenericVariables=>_ExpectedType)).
