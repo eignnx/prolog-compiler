@@ -115,7 +115,7 @@ var_set_union(ListOfVarSets, Union) :-
     term_variables(ListOfVarSets, Union).
 
 
-:- mode test_case(+_Tcx, +_Tm, +(_ExpectedGenericVariables=>_ExpectedType)).
+:- mode test_case(+_Tcx, +_Tm, +_ExpectedResult).
 
 test_case([], 123, []=>nat).
 test_case([], 123+456, []=>nat).
@@ -127,6 +127,18 @@ test_case([], [1, 2, 3], []=>list(nat)).
 test_case([], [[], [], []], [T]=>list(list(T))).
 test_case([], x->123, []=>_T->nat).
 test_case([], x->x, []=>T->T).
+test_case([],
+    f->tuple([f@3, f@true]),
+    failure('Luca Cardelli says this term can''t be typed.')).
+test_case([succ;[]=>nat->nat],
+    (f->tuple([f@3, f@true]))@succ,
+    failure('Luca Cardelli says this term can''t be typed.')).
+test_case([],
+    g->let(f, g, tuple([f@3, f@true])),
+    failure('Luca Cardelli says this term can''t be typed.')).
+test_case([],
+    true+false,
+    failure('Operator `+` is not defined on booleans.')).
 test_case([], let(f, x->x, f), [T]=>T->T).
 test_case([], let(f, x->y->tuple([x,y]), f), [A, B]=>A->B->tuple([A, B])).
 test_case([], let(add, x->y->x+y, add), []=>nat->nat->nat).
@@ -148,5 +160,18 @@ test :-
                 ; format('!!! Test Failure:~n  Term: ~p~n  Expected type: ~p=>~p~n  Actual type:   ~p=>~p~n~n', [Tm, ExpectedVs, ExpectedTy, ActualVs, ActualTy])
             )
             ; format('!!! Inference Failure:~n  Term: ~p~n~n', [Tm])
+        )
+    ),
+    forall(
+        test_case(Tcx, Tm, failure(Msg)),
+        (
+            inference(Tcx, Tm, Res)
+        -> 
+            format('!!! Unexpected Inference Success:~n'),
+            format('  Expected inference failure for term: ~p~n', [Tm]),
+            format('  Inferred incorrect type: ~p~n', [Res]),
+            format('  Message: ~a~n~n', [Msg])
+        ;
+            true
         )
     ).
