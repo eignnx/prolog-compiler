@@ -2,26 +2,33 @@
 :- op(1060, xfy, '=>'). % Type variable introduction
 :- op(1150, fx, mode).
 
-valid_tcx([]).
-valid_tcx([X;Vs=>Ty | Tcx]) :-
+% Defines/validates a typing context.
+tcx([]).
+tcx([X;Sigma | Tcx]) :-
     atom(X),
-    set_of_vars(Vs),
-    valid_tau_type(Ty),
-    valid_tcx(Tcx).
+    sigma_type(Sigma),
+    tcx(Tcx).
 
+% Defines/validates an abstracted ("sigma") type.
+sigma_type(Vs=>Tau) :-
+    set_of_vars(Vs),
+    tau_type(Tau).
+
+% Defines/validates a set of variables.
 set_of_vars([]).
 set_of_vars([V | Vs]) :-
     var(V),
     set_of_vars(Vs),
     maplist(\==(V), Vs).
 
-valid_tau_type(T) :- atom(T).
-valid_tau_type(A->B) :-
-    valid_tau_type(A),
-    valid_tau_type(B).
-valid_tau_type(tuple(Ts)) :-
-    maplist(valid_tau_type, Ts).
-valid_tau_type(V) :- var(V).
+% Defines/validates a simple ("tau") type.
+tau_type(T) :- atom(T). % A primitive type like `nat`, `bool`, etc.
+tau_type(A->B) :-
+    tau_type(A),
+    tau_type(B).
+tau_type(tuple(Ts)) :-
+    maplist(tau_type, Ts).
+tau_type(V) :- var(V). % An Inference/Generic Variable.
 
 /*
 The `inference` predicate makes a distinction between Inference Variables and
