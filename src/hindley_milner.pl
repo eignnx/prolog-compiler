@@ -1,5 +1,4 @@
 :- op(600, yfx, '@').  % Function application
-:- op(450, xfy, '=>'). % Type variable quantification
 :- op(1150, fx, mode).
 
 % Defines/validates a typing context.
@@ -11,7 +10,7 @@ tcx([X-Sigma | Tcx]) :-
 
 % Defines/validates an abstracted ("sigma") type. These are often called "type
 % schemes".
-sigma_type(Vs=>Tau) :-
+sigma_type(forall(Vs, Tau)) :-
     set_of_vars(Vs),
     tau_type(Tau).
 
@@ -70,10 +69,10 @@ inference(Tcx, tuple(Tms), tuple(Tys)) :-
 inference(Tcx, X->Body, FreshXTy->BodyTy) :-
     atom(X),
     !,
-    % Function parameters are not allowed to have generic types. For example
-    % this is not allowed:
-    % `fn thing(x: for<T> (T, T)) -> int`
-    inference([X-[]=>FreshXTy | Tcx], Body, BodyTy).
+    % Function parameters are not allowed to have generic (sigma) types. For
+    % example this is not allowed:
+    % `fn thing(x: for<T> T->T) -> int`
+    inference([X-forall([], FreshXTy) | Tcx], Body, BodyTy).
 
 inference(Tcx, let(X, Binding, Body), BodyTy) :-
     atom(X),
@@ -93,24 +92,24 @@ inference(Tcx, Fn@Arg, RetTy) :-
 inference(Tcx, X, Ty) :-
     atom(X),
     !,
-    ( member(X-Vs=>Ty0, Tcx) -> instantiate(Vs=>Ty0, Ty)
+    ( member(X-forall(Vs, Ty0), Tcx) -> instantiate(forall(Vs, Ty0), Ty)
     ; throw(type_check_err('Unbound variable'(X)))
     ).
 
 
 :- mode instantiate(+_TypeScheme, -_SimpleType).
 
-instantiate(Vs=>Ty0, Ty) :-
+instantiate(forall(Vs, Ty0), Ty) :-
     copy_term(Vs, Ty0, _, Ty).
 
 
 :- mode generalize(+_TypeContext, +_SimpleType, -_TypeScheme).
 
-generalize(Tcx, Ty0, Vs=>Ty) :-
+generalize(Tcx, Ty0, forall(Vs, Ty)) :-
     term_variables(Ty0, TyVars),
     term_variables(Tcx, TcxVars),
     include({TcxVars}/[X]>>maplist(\==(X), TcxVars), TyVars, Vs0),
-    copy_term(Vs0=>Ty0, Vs=>Ty).
+    copy_term(Vs0-Ty0, Vs-Ty).
 
 
 :- mode test_case(+_Tcx, +_Tm, +_ExpectedResult).
@@ -128,7 +127,7 @@ test_case([], x->x, ok(T->T)).
 test_case([],
     f->tuple([f@3, f@true]),
     failure('Luca Cardelli says this term can''t be typed.')).
-test_case([succ-[]=>nat->nat],
+test_case([succ-forall([], nat->nat)],
     (f->tuple([f@3, f@true]))@succ,
     failure('Luca Cardelli says this term can''t be typed.')).
 test_case([],
@@ -145,7 +144,7 @@ test_case([], let(f, x->x, tuple([f@123, f@true])), ok(tuple([nat, bool]))).
 test_case([], let(id, x->x, let(f, y->id@y, f)), ok(A->A)).
 test_case([], let(x, 123, x), ok(nat)).
 test_case([], let(add, x->y->123, add@123@123), ok(nat)).
-test_case([x-[]=>nat], x, ok(nat)).
+test_case([x-forall([], nat)], x, ok(nat)).
 
 
 test :-
