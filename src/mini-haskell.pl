@@ -40,8 +40,12 @@ type_constructor(nat/0).
 type_constructor(bool/0).
 type_constructor(list/1).
 
-
+:- mode inference(+_Term, -_Type).
 :- mode inference(+_TypeContext, +_Term, -_Type).
+
+inference(Tm, Ty) :-
+    initial_tcx(Tcx),
+    inference(Tcx, Tm, Ty).
 
 inference(_Tcx, N, nat) :- integer(N), N >= 0, !.
 inference(Tcx, A+B, Ty) :-
@@ -88,10 +92,10 @@ inference(Tcx, Fn@Arg, RetTy) :-
     !,
     inference(Tcx, Fn, FnTy),
     inference(Tcx, Arg, ArgTy),
-    ( FnTy = (ParamTy -> RetTy) 
+    ( FnTy = (ParamTy -> RetTy), !
         ; format(atom(Msg), 'The term `~p` is not a function, so can''t be called', [Fn]),
           throw(type_check_err(Msg))),
-    ( ArgTy = ParamTy
+    ( ArgTy = ParamTy, !
         ; format(atom(Msg), 'Function `~p` expected an argument of type `~p`, but got type `~p`', [Fn, ParamTy, ArgTy]),
           throw(type_check_err(Msg))).
 
@@ -113,7 +117,7 @@ inference(Tcx, (instance(Class, Signature, X, Impl) ; P), PTy) :-
     FreshSig =.. [Ctor | FreshVs],
     InstantiatedSelf = FreshSig,
     inference(Tcx, Impl, ImplTy),
-    ( XTySelfInstantiated = ImplTy
+    ( XTySelfInstantiated = ImplTy, !
         ; format(atom(Msg), 'The type of `~p` must conform to the type `~p`', [X, XTySelfInstantiated]),
           throw(type_check_err(Msg))),
     format('[INFO] ImplTy = ~p~n', [ImplTy]),
@@ -158,6 +162,12 @@ generalize(Tcx, Ty0, forall(Vs, Ty)) :-
 
 attr_unify_hook(Sort, Ty) :-
     constrain(Ty, Sort).
+
+% Display sort constraints `Sort` on a type variable `X` as `X-Sort`.
+attribute_goals(X) -->
+    { get_attr(X, sort_constraint, Sort) },
+    [X-Sort].
+
 
 constrain(TyVar, Sort1) :-
     var(TyVar),
@@ -223,6 +233,9 @@ instance('Add', pair(['Add'], ['Add']),
     p1->p2->pair(add@(fst@p1)@(fst@p2),
                  add@(snd@p1)@(snd@p2))).
 
+instance('Eq', opt(['Eq']), todo_impl_eq_opt).
+instance('Monoid', opt(['Monoid']), todo_impl_monoid_opt).
+
 % instance('Eq', pair(['Eq'], ['Eq', 'Debug']), i_print_snd_also).
 
 instance_lookup(Class, Ctor, SortVec, Impl) :-
@@ -236,6 +249,8 @@ initial_tcx(nat_add_impl, forall([], nat->nat->nat)).
 initial_tcx(pair, forall([A-[], B-[]], A->B->pair(A, B))).
 initial_tcx(fst, forall([A-[], B-[]], pair(A, B)->A)).
 initial_tcx(snd, forall([A-[], B-[]], pair(A, B)->B)).
+initial_tcx(some, forall([A-[]], A->opt(A))).
+initial_tcx(none, forall([A-[]], opt(A))).
 
 initial_tcx(Tcx) :-
     bagof(X-Ty, initial_tcx(X, Ty), Tcx0),
@@ -259,6 +274,7 @@ repl :-
         catch(inference(Tcx, Tm, Ty),
             type_check_err(Msg),
             (format('Typecheck Error: ~w~n', [Msg]), repl, false)),
+        !,
         format('   ~p : ~p~n', [Tm, Ty]),
         term_variables(Ty, FVs),
         display_constraints(FVs),
@@ -266,21 +282,30 @@ repl :-
     ;
         true. 
 
-display_constraints([]) :- !.
+get_sort(V, S) :-
+    get_attr(V, sort_constraint, S), !.
+get_sort(_, []).
+
+var_sort_pair(V, V-S) :- get_sort(V, S).
+
 display_constraints(FVs) :-
-    FVs = [_ | _], !,
+    maplist(var_sort_pair, FVs, VsSs),
+    include(\=(_-[]), VsSs, VsSsNoUnconstrained),
+    display_constraints_(VsSsNoUnconstrained).
+
+display_constraints_([]) :- !.
+display_constraints_(VsSs) :-
     format('     where~n'),
-    maplist([V]>>(
-            get_attr(V, sort_constraint, Sort),
+    maplist([V-Sort]>>(
             (Sort = [First, Snd | Rest] ->
-                format('      ~p implements ~w', [V, First]),
+                format('       ~p implements ~w', [V, First]),
                 foldl([C, N, N]>>format(' + ~w', [C]), [Snd | Rest], First, _),
                 format('~n')
             ;
             Sort = [Class] ->
                 format('      ~p implements ~w~n', [V, Class])
             )
-        ), FVs).
+        ), VsSs).
 
 
 :- mode test_case(+_Tcx, +_Tm, +_ExpectedResult).
@@ -334,7 +359,7 @@ test :-
             )
         ->
             (
-                ExpectedTy =@= ActualTy
+                ExpectedTy =@= ActualTy, !
             ;
                 format('!!! Test Failure:~n'),
                 format('  Term: ~p~n', [Tm]),
