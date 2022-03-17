@@ -3,42 +3,6 @@
 :- op(350, yfx, '@').  % Function application
 :- op(1150, fx, mode).
 
-% Defines/validates a typing context.
-tcx([]).
-tcx([X-Sigma | Tcx]) :-
-    atom(X),
-    sigma_type(Sigma),
-    tcx(Tcx).
-
-% Defines/validates an abstracted ("sigma") type. These are often called "type
-% schemes".
-sigma_type(forall(Vs, Tau)) :-
-    set_of_vars(Vs),
-    tau_type(Tau).
-
-% Defines/validates a set of variables.
-set_of_vars([]).
-set_of_vars([V | Vs]) :-
-    var(V),
-    maplist(\==(V), Vs),
-    set_of_vars(Vs).
-
-% Defines/validates a simple ("tau") type.
-tau_type(A->B) :-
-    tau_type(A),
-    tau_type(B).
-tau_type(tuple(Ts)) :-
-    maplist(tau_type, Ts).
-tau_type(Constructor) :-
-    Constructor =.. [Name | Args],
-    length(Args, Arity),
-    type_constructor(Name/Arity),
-    maplist(tau_type, Args).
-tau_type(V) :- var(V). % An Inference/Generic Variable.
-
-type_constructor(nat/0).
-type_constructor(bool/0).
-type_constructor(list/1).
 
 :- mode inference(+_Term, -_Type).
 :- mode inference(+_TypeContext, +_Term, -_Type).
