@@ -252,6 +252,37 @@ bind_forall_tyvar_constraints(Id-forall(VsAndSorts, Ty), Id-forall(Vs, Ty)) :-
     ).
 
 
+repl :-
+    read(Tm),
+    Tm \= quit ->
+        initial_tcx(Tcx),
+        catch(inference(Tcx, Tm, Ty),
+            type_check_err(Msg),
+            (format('Typecheck Error: ~w~n', [Msg]), repl)),
+        format('   ~p : ~p~n', [Tm, Ty]),
+        term_variables(Ty, FVs),
+        display_constraints(FVs),
+        repl
+    ;
+        true. 
+
+display_constraints([]) :- !.
+display_constraints(FVs) :-
+    FVs = [_ | _], !,
+    format('     where~n'),
+    maplist([V]>>(
+            get_attr(V, sort_constraint, Sort),
+            (Sort = [First, Snd | Rest] ->
+                format('      ~p implements ~w', [V, First]),
+                foldl([C, N, N]>>format(' + ~w', [C]), [Snd | Rest], First, _),
+                format('~n')
+            ;
+            Sort = [Class] ->
+                format('      ~p implements ~w~n', [V, Class])
+            )
+        ), FVs).
+
+
 :- mode test_case(+_Tcx, +_Tm, +_ExpectedResult).
 
 test_case([], 123, ok(nat)).
@@ -290,8 +321,10 @@ test_case([x-forall([], nat)], x, ok(nat)).
 test :-
     % Test that all expected successes suceed.
     forall(
-        test_case(Tcx, Tm, ok(ExpectedTy)),
+        test_case(Tcx1, Tm, ok(ExpectedTy)),
         (
+            initial_tcx(Tcx0),
+            append(Tcx0, Tcx1, Tcx),
             catch(inference(Tcx, Tm, ActualTy), Err,
                 (
                     format('!!! Error encountered during test:~n'),
@@ -316,8 +349,10 @@ test :-
 
     % Test that all expected failures fail.
     forall(
-        test_case(Tcx, Tm, failure(Msg)),
+        test_case(Tcx1, Tm, failure(Msg)),
         (
+            initial_tcx(Tcx0),
+            append(Tcx0, Tcx1, Tcx),
             catch(inference(Tcx, Tm, Res), type_check_err(_), false) % Ignore any type check errors
         ->
             format('!!! Unexpected Inference Success:~n'),
