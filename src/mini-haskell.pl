@@ -1,6 +1,6 @@
 :- use_module(library(ordsets), [ord_union/3]).
 
-:- op(600, yfx, '@').  % Function application
+:- op(350, yfx, '@').  % Function application
 :- op(1150, fx, mode).
 
 % Defines/validates a typing context.
