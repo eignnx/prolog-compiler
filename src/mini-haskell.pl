@@ -44,13 +44,14 @@ type_constructor(list/1).
 :- mode inference(+_TypeContext, +_Term, -_Type).
 
 inference(_Tcx, N, nat) :- integer(N), N >= 0, !.
-inference(Tcx, A+B, nat) :-
+inference(Tcx, A+B, Ty) :-
     !,
-    inference(Tcx, A, ATy),
-    inference(Tcx, B, BTy),
-    ( ATy = nat, BTy = nat -> true
-    ; throw(type_check_err('The arguments to `+` must have type nat'(ATy, BTy)))
-    ).
+    inference(Tcx, add@A@B, Ty).
+    % inference(Tcx, A, ATy),
+    % inference(Tcx, B, BTy),
+    % ( ATy = nat, BTy = nat -> true
+    % ; throw(type_check_err('The arguments to `+` must have type nat'(ATy, BTy)))
+    % ).
 
 inference(_Tcx, true,  bool) :- !.
 inference(_Tcx, false, bool) :- !.
@@ -87,9 +88,38 @@ inference(Tcx, Fn@Arg, RetTy) :-
     !,
     inference(Tcx, Fn, FnTy),
     inference(Tcx, Arg, ArgTy),
-    ( FnTy = (ArgTy -> RetTy) -> true
-    ; throw(type_check_err('Bad function application'(Fn@Arg, FnTy, ArgTy)))
-    ).
+    ( FnTy = (ParamTy -> RetTy) 
+        ; format(atom(Msg), 'The term `~p` is not a function, so can''t be called', [Fn]),
+          throw(type_check_err(Msg))),
+    ( ArgTy = ParamTy
+        ; format(atom(Msg), 'Function `~p` expected an argument of type `~p`, but got type `~p`', [Fn, ParamTy, ArgTy]),
+          throw(type_check_err(Msg))).
+
+inference(Tcx, (typeclass(Class, X-XScheme) ; P), PTy) :-
+    atom(Class), atom(X), !,
+    assert(typeclass(Class, X-XScheme)),
+    inference([X-XScheme | Tcx], P, PTy).
+
+inference(Tcx, (instance(Class, Signature, X, Impl) ; P), PTy) :-
+    atom(Class), atom(X), Signature =.. [Ctor | SortVec], !,
+
+    member(X-forall([Self-[Class]], XTy), Tcx),
+
+    % Unify a copy of X's scheme with `Ctor(...FreshVars)`.
+    length(SortVec, N),
+    length(FreshVs, N),
+    maplist([V, Sort]>>put_attr(V, sort_constraint, Sort), FreshVs, SortVec),
+    copy_term([Self], XTy, [InstantiatedSelf], XTySelfInstantiated),
+    FreshSig =.. [Ctor | FreshVs],
+    InstantiatedSelf = FreshSig,
+    inference(Tcx, Impl, ImplTy),
+    ( XTySelfInstantiated = ImplTy
+        ; format(atom(Msg), 'The type of `~p` must conform to the type `~p`', [X, XTySelfInstantiated]),
+          throw(type_check_err(Msg))),
+    format('[INFO] ImplTy = ~p~n', [ImplTy]),
+
+    assert(instance(Class, Signature, Impl)),
+    inference(Tcx, P, PTy).
 
 inference(Tcx, X, Ty) :-
     atom(X),
@@ -108,7 +138,7 @@ instantiate(forall(Vs, Ty0), Ty) :-
     maplist(copy_attr(sort_constraint), Vs, VsFresh).
 
 copy_attr(Module, V0, V) :-
-    get_attr(V0, Module, Attr),
+    ( get_attr(V0, Module, Attr) ; Attr = [] ),
     put_attr(V, Module, Attr).
 
 
@@ -151,7 +181,7 @@ most_general_typeclass_constraints(Ctor, Class, SortVec) :-
     setof(SortVec, Impl^instance_lookup(Class, Ctor, SortVec, Impl), SortVecs) ->
         most_general_sortvec(SortVecs, SortVec)
     ;
-        format(atom(Msg), 'The type `~p` doesn''t have an instance of `~p`', [Ctor, Class]),
+        format(atom(Msg), 'The type `~p` doesn''t have an instance of `~w`', [Ctor, Class]),
         throw(type_check_err(Msg)).
 
 most_general_sortvec([], _) :-
@@ -166,11 +196,11 @@ more_general_sortvec(SV1, SV2, SV) :-
     ; throw(type_check_err('Non-comparable sort vecs'(SV1, SV2))).
 
 
-:- dynamic typeclass/3.
+:- dynamic typeclass/2.
 
-typeclass('Eq', Self, eq-forall([Self-[]], Self->Self->bool)).
-typeclass('Add', Self, add-forall([Self-[]], Self->Self->Self)).
-typeclass('Monoid', Self, mappend-forall([Self-[]], Self->Self->Self)).
+typeclass('Eq', eq-forall([Self-['Eq']], Self->Self->bool)).
+typeclass('Add', add-forall([Self-['Add']], Self->Self->Self)).
+typeclass('Monoid', mappend-forall([Self-['Monoid']], Self->Self->Self)).
 
 
 :- dynamic instance/3.
@@ -203,8 +233,24 @@ initial_tcx(and, forall([], bool->bool->bool)).
 initial_tcx(or, forall([], bool->bool->bool)).
 initial_tcx(nat_eq_impl, forall([], nat->nat->bool)).
 initial_tcx(nat_add_impl, forall([], nat->nat->nat)).
+initial_tcx(pair, forall([A-[], B-[]], A->B->pair(A, B))).
 initial_tcx(fst, forall([A-[], B-[]], pair(A, B)->A)).
 initial_tcx(snd, forall([A-[], B-[]], pair(A, B)->B)).
+
+initial_tcx(Tcx) :-
+    bagof(X-Ty, initial_tcx(X, Ty), Tcx0),
+    % Add the typeclass identifiers too.
+    bagof(X-Ty, Class^typeclass(Class, X-Ty), Tcx1),
+    append(Tcx0, Tcx1, Tcx2),
+    maplist(bind_forall_tyvar_constraints, Tcx2, Tcx).
+
+bind_forall_tyvar_constraints(Id-forall(VsAndSorts, Ty), Id-forall(Vs, Ty)) :-
+    maplist(
+        [V-Sort, V]>>put_attr(V, sort_constraint, Sort),
+        VsAndSorts,
+        Vs
+    ).
+
 
 :- mode test_case(+_Tcx, +_Tm, +_ExpectedResult).
 
