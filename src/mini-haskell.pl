@@ -258,7 +258,7 @@ repl :-
         initial_tcx(Tcx),
         catch(inference(Tcx, Tm, Ty),
             type_check_err(Msg),
-            (format('Typecheck Error: ~w~n', [Msg]), repl)),
+            (format('Typecheck Error: ~w~n', [Msg]), repl, false)),
         format('   ~p : ~p~n', [Tm, Ty]),
         term_variables(Ty, FVs),
         display_constraints(FVs),
