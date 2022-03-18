@@ -1,4 +1,4 @@
-:- op(600, yfx, '@').  % Function application
+:- op(350, yfx, '@').  % Function application
 :- op(1150, fx, mode).
 
 % Defines/validates a typing context.
