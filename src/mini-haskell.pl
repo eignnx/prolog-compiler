@@ -29,7 +29,8 @@ inference(Tcx, [Tm | Tms], list(EleTy)) :-
     inference(Tcx, Tm, EleTy),
     inference(Tcx, Tms, list(TailEleTy)),
     ( EleTy = TailEleTy -> true
-    ; throw(type_check_err('You can''t add an element of type A to a list of type list(B)'(EleTy, TailEleTy)))
+    ; format(atom(Msg), 'You can''t add an element of type `~p` to a list of type `list(~p)`', [EleTy, TailEleTy]),
+      throw(type_check_err(Msg))
     ).
 
 inference(Tcx, tuple(Tms), tuple(Tys)) :-
