@@ -15,11 +15,10 @@ inference(_Tcx, N, nat) :- integer(N), N >= 0, !.
 inference(Tcx, A+B, Ty) :-
     !,
     inference(Tcx, add@A@B, Ty).
-    % inference(Tcx, A, ATy),
-    % inference(Tcx, B, BTy),
-    % ( ATy = nat, BTy = nat -> true
-    % ; throw(type_check_err('The arguments to `+` must have type nat'(ATy, BTy)))
-    % ).
+
+inference(Tcx, A==B, Ty) :-
+    !,
+    inference(Tcx, eq@A@B, Ty).
 
 inference(_Tcx, true,  bool) :- !.
 inference(_Tcx, false, bool) :- !.
