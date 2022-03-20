@@ -25,6 +25,8 @@ set_of_vars([V | Vs]) :-
 tau_type(A->B) :-
     tau_type(A),
     tau_type(B).
+tau_type([Child]) :-
+    tau_type(Child).
 tau_type(Tuple) :-
     Tuple =.. [tuple | Ts],
     maplist(tau_type, Ts).
@@ -37,7 +39,6 @@ tau_type(V) :- var(V). % An Inference/Generic Variable.
 
 type_constructor(nat/0).
 type_constructor(bool/0).
-type_constructor(list/1).
 
 
 :- mode inference(+_TypeContext, +_Term, -_Type).
@@ -54,11 +55,11 @@ inference(Tcx, A+B, nat) :-
 inference(_Tcx, true,  bool) :- !.
 inference(_Tcx, false, bool) :- !.
 
-inference(_Tcx, [], list(_)) :- !.
-inference(Tcx, [Tm | Tms], list(EleTy)) :-
+inference(_Tcx, [], [_]) :- !.
+inference(Tcx, [Tm | Tms], [EleTy]) :-
     !,
     inference(Tcx, Tm, EleTy),
-    inference(Tcx, Tms, list(TailEleTy)),
+    inference(Tcx, Tms, [TailEleTy]),
     ( EleTy = TailEleTy -> true
     ; throw(type_check_err('You can''t add an element of type A to a list of type list(B)'(EleTy, TailEleTy)))
     ).
@@ -122,9 +123,9 @@ test_case([], 123+456, ok(nat)).
 test_case([], true, ok(bool)).
 test_case([], false, ok(bool)).
 test_case([], tuple(123, true), ok(tuple(nat, bool))).
-test_case([], [], ok(list(_))).
-test_case([], [1, 2, 3], ok(list(nat))).
-test_case([], [[], [], []], ok(list(list(_)))).
+test_case([], [], ok([_])).
+test_case([], [1, 2, 3], ok([nat])).
+test_case([], [[], [], []], ok([[_]])).
 test_case([], x->123, ok(_T->nat)).
 test_case([], x->x, ok(T->T)).
 test_case([],
