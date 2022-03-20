@@ -78,7 +78,7 @@ inference(Tcx, let(X, Binding, Body), BodyTy) :-
     atom(X),
     !,
     inference(Tcx, Binding, BindingTy),
-    generalize(Tcx, BindingTy, BindingScheme),
+    generalization(Tcx, BindingTy, BindingScheme),
     inference([X-BindingScheme | Tcx], Body, BodyTy).
 
 inference(Tcx, Fn@Arg, RetTy) :-
@@ -92,20 +92,20 @@ inference(Tcx, Fn@Arg, RetTy) :-
 inference(Tcx, X, Ty) :-
     atom(X),
     !,
-    ( member(X-forall(Vs, Ty0), Tcx) -> instantiate(forall(Vs, Ty0), Ty)
+    ( member(X-forall(Vs, Ty0), Tcx) -> instantiation(forall(Vs, Ty0), Ty)
     ; throw(type_check_err('Unbound variable'(X)))
     ).
 
 
-:- mode instantiate(+_TypeScheme, -_SimpleType).
+:- mode instantiation(+_TypeScheme, -_SimpleType).
 
-instantiate(forall(Vs, Ty0), Ty) :-
+instantiation(forall(Vs, Ty0), Ty) :-
     copy_term(Vs, Ty0, _, Ty).
 
 
-:- mode generalize(+_TypeContext, +_SimpleType, -_TypeScheme).
+:- mode generalization(+_TypeContext, +_SimpleType, -_TypeScheme).
 
-generalize(Tcx, Ty0, forall(Vs, Ty)) :-
+generalization(Tcx, Ty0, forall(Vs, Ty)) :-
     term_variables(Ty0, TyVars),
     term_variables(Tcx, TcxVars),
     include({TcxVars}/[X]>>maplist(\==(X), TcxVars), TyVars, Vs0),
