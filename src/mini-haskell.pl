@@ -238,26 +238,36 @@ repl :-
             type_check_err(Msg),
             (format('Typecheck Error: ~w~n', [Msg]), repl, false)),
         !,
-        format('   ~p : ~p~n', [Tm, Ty]),
-        term_variables(Ty, FVs),
-        display_constraints(FVs),
+        display_tm_ty(Tm, Ty),
         repl
     ;
         true. 
+
+
+display_tm_ty(Tm, Ty) :-
+    term_variables(Ty, FVs),
+    maplist(var_sort_pair_wo_attr, FVs, VsSs), % Remove attrs so `numbervars` will work.
+    numbervars(Tm-Ty),
+    format('   ~p : ~p~n', [Tm, Ty]),
+    include(\=(_-[]), VsSs, VsSsNoUnconstrained),
+    display_constraints(VsSsNoUnconstrained).
+
 
 get_sort(V, S) :-
     get_attr(V, sort_constraint, S), !.
 get_sort(_, []).
 
+
 var_sort_pair(V, V-S) :- get_sort(V, S).
 
-display_constraints(FVs) :-
-    maplist(var_sort_pair, FVs, VsSs),
-    include(\=(_-[]), VsSs, VsSsNoUnconstrained),
-    display_constraints_(VsSsNoUnconstrained).
 
-display_constraints_([]) :- !.
-display_constraints_(VsSs) :-
+var_sort_pair_wo_attr(V, V-S) :-
+    var_sort_pair(V, V-S),
+    del_attr(V, sort_constraint).
+    
+
+display_constraints([]) :- !.
+display_constraints(VsSs) :-
     format('     where~n'),
     maplist([V-Sort]>>(
             (Sort = [First, Snd | Rest] ->
