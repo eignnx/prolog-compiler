@@ -49,7 +49,7 @@ inference(Tcx, let(X, Binding, Body), BodyTy) :-
     atom(X),
     !,
     inference(Tcx, Binding, BindingTy),
-    generalize(Tcx, BindingTy, BindingScheme),
+    generalization(Tcx, BindingTy, BindingScheme),
     inference([X-BindingScheme | Tcx], Body, BodyTy).
 
 inference(Tcx, Fn@Arg, RetTy) :-
@@ -92,36 +92,35 @@ inference(Tcx, (instance(Class, Signature, X, Impl) ; P), PTy) :-
 inference(Tcx, X, Ty) :-
     atom(X),
     !,
-    ( member(X-forall(Vs, Ty0), Tcx) -> instantiate(forall(Vs, Ty0), Ty)
+    ( member(X-forall(Vs, Ty0), Tcx) -> instantiation(forall(Vs, Ty0), Ty)
     ; throw(type_check_err('Unbound variable'(X)))
     ).
 
 
-:- mode instantiate(+_TypeScheme, -_SimpleType).
+:- mode instantiation(+_TypeScheme, -_SimpleType).
 
-instantiate(forall(Vs, Ty0), Ty) :-
+instantiation(forall(Vs, Ty0), Ty) :-
     % Replace all vars in `Vs` with fresh variables.
     copy_term(Vs, Ty0, VsFresh, Ty),
     % Make sure to copy the constraints over to the new variables.
-    maplist(copy_attr(sort_constraint), Vs, VsFresh).
-
-copy_attr(Module, V0, V) :-
-    ( get_attr(V0, Module, Attr) ; Attr = [] ),
-    put_attr(V, Module, Attr).
+    maplist(copy_sort_attr, Vs, VsFresh).
 
 
-:- mode generalize(+_TypeContext, +_SimpleType, -_TypeScheme).
+copy_sort_attr(V0, V) :-
+    ( get_attr(V0, sort_constraint, Attr) -> true
+    ; Attr = []
+    ),
+    put_attr(V, sort_constraint, Attr).
 
-generalize(Tcx, Ty0, forall(Vs, Ty)) :-
-    term_variables(Ty0, TyVars),
+
+:- mode generalization(+_TypeContext, +_SimpleType, -_TypeScheme).
+
+generalization(Tcx, Ty, forall(Vs, Ty)) :-
+    term_variables(Ty, TyVars),
     term_variables(Tcx, TcxVars),
     % Keep only the free variables that are not involved in constraints from
     % their environment (`Tcx`).
-    include({TcxVars}/[X]>>maplist(\==(X), TcxVars), TyVars, Vs0),
-    % Make fresh copies of those variables.
-    copy_term(Vs0-Ty0, Vs-Ty),
-    % Copy the sort constraints onto the fresh variables.
-    maplist(copy_attr(sort_constraint), Vs0, Vs).
+    include({TcxVars}/[X]>>maplist(\==(X), TcxVars), TyVars, Vs).
 
 
 attr_unify_hook(Sort, Ty) :-
