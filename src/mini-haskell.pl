@@ -276,7 +276,7 @@ display_constraints(VsSs) :-
                 format('~n')
             ;
             Sort = [Class] ->
-                format('      ~p implements ~w~n', [V, Class])
+                format('       ~p implements ~w~n', [V, Class])
             )
         ), VsSs).
 
