@@ -25,7 +25,8 @@ set_of_vars([V | Vs]) :-
 tau_type(A->B) :-
     tau_type(A),
     tau_type(B).
-tau_type(tuple(Ts)) :-
+tau_type(Tuple) :-
+    Tuple =.. [tuple | Ts],
     maplist(tau_type, Ts).
 tau_type(Constructor) :-
     Constructor =.. [Name | Args],
@@ -62,9 +63,11 @@ inference(Tcx, [Tm | Tms], list(EleTy)) :-
     ; throw(type_check_err('You can''t add an element of type A to a list of type list(B)'(EleTy, TailEleTy)))
     ).
 
-inference(Tcx, tuple(Tms), tuple(Tys)) :-
+inference(Tcx, Tuple, Ty) :-
+    Tuple =.. [tuple | Tms],
     !,
-    maplist({Tcx}/[E, ETy]>>inference(Tcx, E, ETy), Tms, Tys).
+    maplist({Tcx}/[E, ETy]>>inference(Tcx, E, ETy), Tms, Tys),
+    Ty =.. [tuple | Tys].
 
 inference(Tcx, X->Body, FreshXTy->BodyTy) :-
     atom(X),
@@ -118,29 +121,29 @@ test_case([], 123, ok(nat)).
 test_case([], 123+456, ok(nat)).
 test_case([], true, ok(bool)).
 test_case([], false, ok(bool)).
-test_case([], tuple([123, true]), ok(tuple([nat, bool]))).
+test_case([], tuple(123, true), ok(tuple(nat, bool))).
 test_case([], [], ok(list(_))).
 test_case([], [1, 2, 3], ok(list(nat))).
 test_case([], [[], [], []], ok(list(list(_)))).
 test_case([], x->123, ok(_T->nat)).
 test_case([], x->x, ok(T->T)).
 test_case([],
-    f->tuple([f@3, f@true]),
+    f->tuple(f@3, f@true),
     failure('Luca Cardelli says this term can''t be typed.')).
 test_case([succ-forall([], nat->nat)],
-    (f->tuple([f@3, f@true]))@succ,
+    (f->tuple(f@3, f@true))@succ,
     failure('Luca Cardelli says this term can''t be typed.')).
 test_case([],
-    g->let(f, g, tuple([f@3, f@true])),
+    g->let(f, g, tuple(f@3, f@true)),
     failure('Luca Cardelli says this term can''t be typed.')).
 test_case([],
     true+false,
     failure('Operator `+` is not defined on booleans.')).
 test_case([], let(f, x->x, f), ok(T->T)).
-test_case([], let(f, x->y->tuple([x,y]), f), ok(A->B->tuple([A, B]))).
+test_case([], let(f, x->y->tuple(x,y), f), ok(A->B->tuple(A, B))).
 test_case([], let(add, x->y->x+y, add), ok(nat->nat->nat)).
 test_case([], let(f, x->x, f@123), ok(nat)).
-test_case([], let(f, x->x, tuple([f@123, f@true])), ok(tuple([nat, bool]))).
+test_case([], let(f, x->x, tuple(f@123, f@true)), ok(tuple(nat, bool))).
 test_case([], let(id, x->x, let(f, y->id@y, f)), ok(A->A)).
 test_case([], let(x, 123, x), ok(nat)).
 test_case([], let(add, x->y->123, add@123@123), ok(nat)).
